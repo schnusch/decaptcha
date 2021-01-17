@@ -17,21 +17,10 @@
  * along with decaptcha.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { DecaptchaTest } from './hosts/decaptchatest'
-import { Evoload } from './hosts/evoload'
+import { ReCaptchaHost } from './common'
 
-export const captchaHosts: CaptchaHost[] = [
-	new DecaptchaTest(),
-	new Evoload(),
-]
-
-import { CaptchaHost } from './hosts/common'
-
-export function getHostHandler(host: string): CaptchaHost | null {
-	for(const captchaHost of captchaHosts) {
-		if(captchaHost.matchHost(host)) {
-			return captchaHost
-		}
+export class Evoload extends ReCaptchaHost {
+	matchHost(host: string): boolean {
+		return host.match(/(^|\.)evoload\.io$/) != null
 	}
-	return null
 }
