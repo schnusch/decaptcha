@@ -1,0 +1,21 @@
+{
+	"compilerOptions": {
+		"target":           "es6",
+		"preserveSymlinks": true,
+
+		"strict":             true,
+		"noImplicitReturns":  true,
+		"noUnusedParameters": true,
+		"forceConsistentCasingInFileNames": true,
+
+		"listEmittedFiles": true,
+		"noEmitOnError":    true,
+		"newLine":          "lf",
+
+		"rootDir": "../app",
+		"outDir":  "../dist"
+	},
+	"typeAcquisition": {
+		"enable": false
+	}
+}

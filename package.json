@@ -1,0 +1,22 @@
+{
+	"name": "decaptcha",
+	"version": "0.0.1",
+	"license": "AGPL-3.0-or-later",
+	"repository": "github:schnusch/decaptcha",
+	"private": true,
+	"bin": {
+		"decaptcha": "bin/decaptcha"
+	},
+	"dependencies": {
+		"electron": "*",
+		"jsonschema": "*",
+		"socksv5": "*",
+		"yargs": "*"
+	},
+	"devDependencies": {
+		"typescript": "*",
+		"@types/grecaptcha": "*",
+		"@types/socksv5": "file:vendor/types/socksv5",
+		"@types/yargs": "*"
+	}
+}

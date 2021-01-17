@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<!--
+	we can't use XHTML because reCAPTCHA throws
+	TypeError: Cannot read property 'style' of null
+-->
+<html>
+	<head>
+		<script src="/recaptcha.js"></script>
+		<link rel="stylesheet" href="/index.css"/>
+		<script src="https://www.recaptcha.net/recaptcha/api.js?onload=grecaptchaOnLoad" async="yes" defer="yes"></script>
+	</head>
+	<body>
+		<div id="main">
+			<div class="g-recaptcha" data-badge="inline"
+				data-sitekey="<!-- sitekey xml -->"
+				data-callback="grecaptchaOnSubmit"
+				data-size="invisible"></div>
+		</div>
+	</body>
+</html>

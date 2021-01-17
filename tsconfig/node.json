@@ -1,0 +1,14 @@
+{
+	"extends": "./common.json",
+	"compilerOptions": {
+		"module": "commonjs",
+		"esModuleInterop": true,
+		"moduleResolution": "node"
+	},
+	"include": [
+		"../app/**/*.ts"
+	],
+	"exclude": [
+		"../app/public"
+	]
+}
