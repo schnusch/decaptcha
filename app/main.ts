@@ -23,6 +23,7 @@ import { IncomingMessage, ServerResponse } from 'http'
 import * as https from 'https'
 import { AddressInfo } from 'net'
 import * as socksv5 from 'socksv5'
+import * as stream from 'stream'
 
 import yargs from 'yargs'
 // import hideBin like this
@@ -360,7 +361,7 @@ class DeCaptcha extends EventEmitter {
 		this.currentCaptcha = this.captchas.shift() || null
 		if(!this.currentCaptcha) {
 			console.error("no CAPTCHAs pending, closing window...")
-			this.window?.destroy()
+			this.window?.destroy() // seems to stop the app
 			this.window = null
 			return
 		}
@@ -408,6 +409,120 @@ class DeCaptcha extends EventEmitter {
 	}
 }
 
+type RequestEventCallback = (
+	req:     CaptchaRequest,
+	resolve: (resp:   CaptchaResponse) => void,
+	reject:  (error?: Error)           => void,
+) => void
+
+interface RequestProducer {
+	on(event: 'end',     callback: () => void): this
+	on(event: 'request', callback: RequestEventCallback): this
+}
+
+class RequestProducer extends EventEmitter {
+	stop(): void {
+		throw new Error("cannot be stopped")
+	}
+}
+
+/**
+ * Read CaptchaRequests from *input* and write CaptchaResponse to *output*.
+ *
+ * The input consists of one JSON object encoding the CaptchaRequest per line.
+ * Empty lines and lines starting with "#" will be ignored.
+ * The output is one JSON object encoding the CaptchaResponse per line.
+ */
+class StreamListener extends RequestProducer {
+	private lines:          string[]
+	private unfinishedLine: string
+	private empty:          boolean
+	private ended:          boolean
+
+	constructor(private input: stream.Readable, private output: stream.Writable) {
+		super()
+		this.lines          = []
+		this.unfinishedLine = ''
+		this.empty          = true
+		this.ended          = false
+		this.input.setEncoding("utf8")
+		this.input.on('data', this.more.bind(this))
+		this.input.on('end',  this.end.bind(this))
+	}
+
+	/**
+	 * Stop listeing for events on the input stream, currently outstanding
+	 * events will still be emitted.
+	 * **This instance should not be used afterwards.**
+	 */
+	stop(): void {
+		this.input.off('data', this.more)
+		this.input.off('end',  this.end)
+	}
+
+	private more(chunk: string): void {
+		const lines = (this.unfinishedLine + chunk).split('\n')
+		this.unfinishedLine = this.lines.pop() || ""
+		for(const line of lines) {
+			this.pushLine(line)
+		}
+	}
+
+	private end(): void {
+		this.ended = true
+		this.pushLine(this.unfinishedLine)
+	}
+
+	private pushLine(line: string): void {
+		line = line.replace(/\r$/, '')
+		// ignore empty lines and comment lines/whitespaces
+		if(line.length > 0 && !line.match(/^[ \t]*(#|$)/)) {
+			this.lines.push(line)
+		}
+		if(this.empty) {
+			this.emitRequest()
+		}
+	}
+
+	private emitRequest(): void {
+		const line = this.lines.shift()
+		if(!line) {
+			this.empty = true
+			if(this.ended) {
+				this.input.off('data', this.more)
+				this.input.off('end',  this.end)
+				this.emit('end')
+			}
+			return
+		}
+		this.empty = false
+
+		const req = parseCaptchaRequest(line)
+		new Promise<CaptchaSuccess>((resolve, reject) => {
+			this.emit('request', req, resolve, reject)
+		}).catch(error => {
+			// create error response
+			return {
+				error:  true,
+				reason: error.message,
+			} as CaptchaError
+		}).then((resp: CaptchaResponse) => {
+			// write response to this.output
+			const data = JSON.stringify(resp)
+			if(data.indexOf('\n') >= 0) {
+				// this should never really occur, but warn if it happens anyway
+				console.error('JSON serialization of CaptchaResponse spans multiple lines. This breaks our stdio-protocol.')
+			}
+			this.output.write(data + '\n', 'utf8', (error: Error | null | undefined) => {
+				if(error) {
+					console.error('cannot write CAPTCHA response:', error)
+				}
+				this.emitRequest()
+			})
+		})
+	}
+}
+
 async function main(): Promise<void> {
 	process.stderr.setEncoding('utf8')
 
@@ -438,18 +553,10 @@ async function main(): Promise<void> {
 
 	const decaptcha = new DeCaptcha(app, captchaServer, socksProxy, opts['dev-tools'])
 
-	const testReq: CaptchaRequest = {
-		url: 'https://decaptcha.test/',
-		options: {
-			// test key, see https://developers.google.com/recaptcha/docs/faq#id-like-to-run-automated-tests-with-recaptcha.-what-should-i-do
-			sitekey: '6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI'
-		}
+	const requestCallback: RequestEventCallback = (req, resolve, reject) => {
+		decaptcha.solve(req).then(resolve, reject)
 	}
-	const echoResp = (resp: CaptchaResponse) => {
-		console.error("CAPTCHA response", resp)
-	}
-
-	decaptcha.solve(testReq).then(echoResp)
-	decaptcha.solve(testReq).then(echoResp)
+	new StreamListener(process.stdin, process.stdout)
+		.on('request', requestCallback)
 }
 main()

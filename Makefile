@@ -44,6 +44,8 @@ help:
 	| column -t -s '	'
 
 run: all cert ## run decaptcha with self-signed certificates
+	req='{"url":"https://decaptcha.test/","options":{"sitekey":"6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI"}}'; \
+	{ echo "$$req"; echo "$$req"; } | \
 	bin/decaptcha --cert=dist/cert/certificate.crt --key=dist/cert/private.key --dev-tools
 
 cert: dist/cert/certificate.crt dist/cert/private.key ## generate self-signed certificates

@@ -1,9 +1,14 @@
 # decaptcha
 
-The aim of this tool is to let you solve [reCAPTCHAs](https://developers.google.com/recaptcha/intro)
+This tool lets you solve [reCAPTCHAs](https://developers.google.com/recaptcha/intro)
 (or other CAPTCHAs) outside the browser.
 
-**WORK IN PROGRESS:** Currently only running in some sort of demo mode.
+To solve CAPTCHAs you have to communicate with the stdin/stdout of the process.
+Write [CaptchaRequest](https://github.com/schnusch/decaptcha/blob/a376080/app/util.ts#L38)s
+encoded to a single line of JSON to stdin. The CAPTCHA responses are written to
+the process's stdout. **There are no handlers yet (see [app/hosts/](https://github.com/schnusch/decaptcha/tree/master/app/hosts)).**
+
+## About
 
 Because reCAPTCHA verifies the host it is running on, reCAPTCHAs from a site
 cannot simply be embedded somewehere else with code extracting the reCAPTCHA
