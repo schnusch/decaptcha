@@ -57,7 +57,7 @@ To imitate this the following steps are taken:
 
 ## Usage
 
-**Usage:** `decaptcha --cert=CERT --key=KEY [--https-port=PORT] [--dev-tools]`
+**Usage:** `decaptcha --cert=CERT --key=KEY [--https-port=PORT] [--dev-tools] [--close-window]`
 
 ## Limitations
 

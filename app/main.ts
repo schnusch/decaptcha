@@ -51,11 +51,16 @@ import {
 import { CaptchaHost } from './hosts/common'
 import { getHostHandler } from './hosts'
 
+// redirect console output to stderr
+console.debug = console.warn
+console.info  = console.warn
+
 type CommandLineArgs = {
-	cert:          string,
-	key:           string,
-	'https-port'?: number,
-	'dev-tools'?:  boolean,
+	cert:            string,
+	key:             string,
+	'https-port'?:   number,
+	'dev-tools'?:    boolean,
+	'close-window'?: boolean,
 }
 
 function parseCommandLine(): CommandLineArgs {
@@ -85,6 +90,10 @@ function parseCommandLine(): CommandLineArgs {
 			'dev-tools': {
 				type:        'boolean',
 				description: "open Chrome DevTools",
+			},
+			'close-window': {
+				type:        'boolean',
+				description: "close window after every CAPTCHA regardless of queue",
 			},
 		})
 		.alias('version', 'V')
@@ -181,7 +190,7 @@ class CaptchaServer extends EventEmitter implements Hijacker {
 	}
 
 	setHost(host: CaptchaHost | null) {
-		console.error(`CatpchaHost.setHost(${host && host.constructor.name})`)
+		console.debug(`CatpchaHost.setHost(${host && host.constructor.name})`)
 		this.host = host
 	}
 }
@@ -208,7 +217,7 @@ class HijackingSocksProxy extends socksv5.Server {
 		// elecron/Google Chrome seems to do so by default
 		if(!this.condition || this.condition({address: info.dstAddr, port: info.dstPort})) {
 			// hijack connection
-//			console.error(`hijacking connection to ${info.dstAddr}:${info.dstPort}`)
+//			console.debug(`hijacking connection to ${info.dstAddr}:${info.dstPort}`)
 			info.dstAddr = this.destination.address
 			info.dstPort = this.destination.port
 		}
@@ -236,7 +245,7 @@ class HijackingSocksProxy extends socksv5.Server {
 	}
 
 	setHost(host: CaptchaHost | null) {
-		console.error(`HijackingSocksProxy.setHost(${host && host.constructor.name})`)
+		console.debug(`HijackingSocksProxy.setHost(${host && host.constructor.name})`)
 		if(host) {
 			this.condition = ({address}) => host.matchHost(address)
 		} else {
@@ -260,7 +269,8 @@ class DeCaptcha extends EventEmitter {
 		private app:           App,
 		private captchaServer: CaptchaServer,
 		private socksProxy:    HijackingSocksProxy,
-		private openDevTools:  boolean             = false,
+		private openDevTools:           boolean = false,
+		private closeAfterEveryCaptcha: boolean = false,
 	) {
 		super()
 		this.window         = null
@@ -269,8 +279,12 @@ class DeCaptcha extends EventEmitter {
 
 		this.captchaServer.on('response', async (resp: CaptchaSuccess) => {
 			if(this.currentCaptcha) {
-				this.currentCaptcha.resolve(resp)
-				this.currentCaptcha = null
+				console.info("CAPTCHA solved", resp)
+				this.resolveCaptcha(resp)
+				if(this.closeAfterEveryCaptcha) {
+					console.debug("close window anyway for testing purposes")
+					this.window?.destroy()
+				}
 			} else {
 				throw new Error("unexpected response: " + JSON.stringify(resp))
 			}
@@ -295,10 +309,14 @@ class DeCaptcha extends EventEmitter {
 				callback(false)
 			}
 		})
+
+		this.app.on('window-all-closed', (_ev: Event) => {
+			// don't quit the app
+		})
 	}
 
 	private async openWindow(): Promise<void> {
-		console.error("opening new window...")
+		console.debug("opening new window...")
 
 		this.window = new BrowserWindow({
 			webPreferences: {
@@ -311,16 +329,10 @@ class DeCaptcha extends EventEmitter {
 				enableWebSQL: false,
 			},
 		})
-		// when listening for `closed` event, the window opened right after is
-		// also closed, so we listen on `close`
-		this.window.once("close", (_ev: Event) => {
-			if(this.window) {
-				// it actually seems to be the call to `destroy` that does this,
-				// so we don't do this either
-				//this.window.destroy()
-				this.window = null
-			}
-			this.cancelCurrentCaptcha()
+		this.window.on('closed', async (_ev: Event) => {
+			this.window = null
+			this.rejectCaptcha(new Error("cancelled by closing the window"))
+			this.nextCaptcha()
 		})
 
 		this.window.removeMenu()
@@ -343,14 +355,24 @@ class DeCaptcha extends EventEmitter {
 		return this.window
 	}
 
-	cancelCurrentCaptcha(): void {
+	private resolveCaptcha(resp: CaptchaSuccess): void {
 		if(!this.currentCaptcha) {
-			return
+			console.warn("cannot resolve current CAPTCHA, already done")
+		} else {
+			const resolve = this.currentCaptcha.resolve
+			this.currentCaptcha = null
+			resolve(resp)
 		}
-		console.error(`CAPTCHA ${this.currentCaptcha.request.url} canceled.`)
-		this.currentCaptcha.reject(new Error("cancelled by closing the window"))
-		this.currentCaptcha = null // done with current CAPTCHA
-		this.nextCaptcha()
+	}
+
+	private rejectCaptcha(error: Error): void {
+		if(!this.currentCaptcha) {
+			console.warn("cannot reject current CAPTCHA, already done")
+		} else {
+			const reject = this.currentCaptcha.reject
+			this.currentCaptcha = null
+			reject(error)
+		}
 	}
 
 	private async nextCaptcha(): Promise<void> {
@@ -360,13 +382,13 @@ class DeCaptcha extends EventEmitter {
 
 		this.currentCaptcha = this.captchas.shift() || null
 		if(!this.currentCaptcha) {
-			console.error("no CAPTCHAs pending, closing window...")
+			console.info("no CAPTCHAs pending, closing window...")
 			this.window?.destroy() // seems to stop the app
 			this.window = null
 			return
 		}
 
-		console.error("\nprocessing next CAPTCHA", this.currentCaptcha.request)
+		console.info("\nprocessing next CAPTCHA", this.currentCaptcha.request)
 		const url  = new URL(this.currentCaptcha.request.url)
 		const host = getHostHandler(url.hostname)
 		if(host) {
@@ -376,7 +398,7 @@ class DeCaptcha extends EventEmitter {
 		this.captchaServer.setHost(host)
 		this.socksProxy.setHost(host)
 
-		console.error(`displaying CAPTCHA ${this.currentCaptcha.request.url} ...`)
+		console.debug(`displaying CAPTCHA ${this.currentCaptcha.request.url} ...`)
 		const win = await this.getWindow()
 		if(!this.currentCaptcha) {
 			throw new Error("currentCaptcha is null")
@@ -533,7 +555,7 @@ async function main(): Promise<void> {
 		app.whenReady(),
 	])
 
-	console.error("starting CAPTCHA server...")
+	console.info("starting CAPTCHA server...")
 	const captchaServer = new CaptchaServer({
 		port: opts['https-port'],
 		cert: cert,
@@ -541,22 +563,26 @@ async function main(): Promise<void> {
 	})
 	await captchaServer.listen()
 	const httpsAddr = captchaServer.address()
-	console.error("CAPTCHA server listening on", URLfromAddressInfo(httpsAddr, 'https'))
+	console.info("CAPTCHA server listening on", URLfromAddressInfo(httpsAddr, 'https'))
 
-	console.error("starting hijacking SOCKS server...")
+	console.info("starting hijacking SOCKS server...")
 	const socksProxy = new HijackingSocksProxy({
 		address: httpsAddr.address,
 		port:    httpsAddr.port,
 	})
 	await socksProxy.listen()
-	console.error("hijacking SOCKS proxy listening on", URLfromAddressInfo(socksProxy.address(), 'socks5'))
+	console.info("hijacking SOCKS proxy listening on", URLfromAddressInfo(socksProxy.address(), 'socks5'))
 
-	const decaptcha = new DeCaptcha(app, captchaServer, socksProxy, opts['dev-tools'])
+	const decaptcha = new DeCaptcha(app, captchaServer, socksProxy, opts['dev-tools'], opts['close-window'])
 
 	const requestCallback: RequestEventCallback = (req, resolve, reject) => {
 		decaptcha.solve(req).then(resolve, reject)
 	}
 	new StreamListener(process.stdin, process.stdout)
 		.on('request', requestCallback)
+		.once('end', () => {
+			console.info("input ended.")
+			app.quit()
+		})
 }
 main()
