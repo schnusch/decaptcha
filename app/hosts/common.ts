@@ -19,10 +19,19 @@
 
 import { IncomingMessage, ServerResponse } from 'http'
 import * as fs from 'fs'
+import * as jsonschema from 'jsonschema'
 import * as path from 'path'
 import * as stream from 'stream'
 
-import { CaptchaHostOptions, getPublicDirectories, httpErrorPage, openPublicFile, readAll, readFile } from '../util'
+import {
+	CaptchaHostOptions,
+	getPublicDirectories,
+	httpErrorPage,
+	Json,
+	openPublicFile,
+	readAll,
+	readFile,
+} from '../util'
 
 export type RequestHandler = (req: IncomingMessage, res: ServerResponse) => void
 
@@ -111,30 +120,67 @@ export abstract class CaptchaHost {
 	}
 }
 
-export abstract class ReCaptchaHost extends CaptchaHost {
-	protected sitekeyXML: string | null
+type ReCaptchaHostOptions = {
+	sitekey?:   string,
+	invisible?: boolean,
+}
 
-	constructor() {
+export abstract class ReCaptchaHost extends CaptchaHost {
+	protected readonly defaultOptions: ReCaptchaHostOptions = {
+		// testing site key, see https://developers.google.com/recaptcha/docs/faq#id-like-to-run-automated-tests-with-recaptcha.-what-should-i-do
+		sitekey:   '6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI',
+		invisible: false,
+	}
+	protected recaptchaAttributes: string = ""
+
+	constructor(defaults?: ReCaptchaHostOptions) {
 		super()
-		this.sitekeyXML = null
+		if(defaults.sitekey != undefined) {
+			this.defaultOptions.sitekey = defaults.sitekey
+		}
+		if(defaults.invisible != undefined) {
+			this.defaultOptions.invisible = defaults.invisible
+		}
+		this.setOptions({})
 	}
 
 	// TODO matchHost, see https://developers.google.com/recaptcha/docs/domain_validation
 
-	setOptions(options: CaptchaHostOptions) {
-		if(!options.hasOwnProperty('sitekey')) {
-			throw new Error("options is missing 'sitekey'")
-		} else if(typeof options.sitekey != 'string') {
-			throw new Error("options.sitekey must be a string")
+	protected getOption<T extends Json>(
+		options:  CaptchaHostOptions,
+		property: keyof ReCaptchaHostOptions,
+	): T {
+		if(Object.prototype.hasOwnProperty.call(options, property)) {
+			return options[property] as T
+		} else if(this.defaultOptions[property] == undefined) {
+			throw new Error(`${this.constructor.name}'s default option ${property} is unset`)
+		} else {
+			return this.defaultOptions[property] as T
 		}
-		this.sitekeyXML = escapeXML(options.sitekey)
+	}
+
+	setOptions(options: CaptchaHostOptions) {
+		jsonschema.validate(options, {
+			type: 'object',
+			properties: {
+				sitekey:   {type: 'string'},
+				invisible: {type: 'boolean'},
+			},
+		}, {
+			allowUnknownAttributes: true,
+			throwFirst:             true,
+		})
+		const sitekey   = this.getOption<string> (options, 'sitekey')
+		const invisible = this.getOption<boolean>(options, 'invisible')
+		this.recaptchaAttributes = `data-sitekey="${escapeXML(sitekey)}"`
+		if(invisible) {
+			this.recaptchaAttributes += ' data-size="invisible"'
+		}
 	}
 
 	async init(): Promise<void> {
-		let html = await this.readFile('recaptcha.html', {encoding: 'utf8'})
-		if(this.sitekeyXML) {
-			html = html.replace(/<!-- sitekey xml -->/g, this.sitekeyXML)
-		}
+		const html = (await this.readFile('recaptcha.html', {encoding: 'utf8'}))
+			.replace(/<!-- recaptcha config -->/, this.recaptchaAttributes)
 		this.addFile('',              serveStaticBuffer(html, 'text/html; charset=utf-8'))
 		this.addFile('/recaptcha.js', serveStaticFile('recaptcha.js', 'text/javascript; charset=utf-8'))
 	}
