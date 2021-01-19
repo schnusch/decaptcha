@@ -20,7 +20,7 @@
 import { ReCaptchaHost } from './common'
 
 export class Evoload extends ReCaptchaHost {
-	matchHost(host: string): boolean {
-		return host.match(/(^|\.)evoload\.io$/) != null
+	constructor() {
+		super({hosts: ['evoload.io']})
 	}
 }

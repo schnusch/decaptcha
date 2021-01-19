@@ -20,7 +20,7 @@
 import { ReCaptchaHost } from './common'
 
 export class DecaptchaTest extends ReCaptchaHost {
-	matchHost(host: string): boolean {
-		return host.match(/(^|\.)decaptcha\.test$/) != null
+	constructor() {
+		super({hosts: ['decaptcha.test']})
 	}
 }

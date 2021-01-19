@@ -126,6 +126,7 @@ type ReCaptchaHostOptions = {
 }
 
 export abstract class ReCaptchaHost extends CaptchaHost {
+	protected readonly hosts: string[]
 	protected readonly defaultOptions: ReCaptchaHostOptions = {
 		// testing site key, see https://developers.google.com/recaptcha/docs/faq#id-like-to-run-automated-tests-with-recaptcha.-what-should-i-do
 		sitekey:   '6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI',
@@ -133,8 +134,9 @@ export abstract class ReCaptchaHost extends CaptchaHost {
 	}
 	protected recaptchaAttributes: string = ""
 
-	constructor(defaults?: ReCaptchaHostOptions) {
+	constructor(defaults: ReCaptchaHostOptions & {hosts: string[]}) {
 		super()
+		this.hosts = defaults.hosts
 		if(defaults.sitekey != undefined) {
 			this.defaultOptions.sitekey = defaults.sitekey
 		}
@@ -144,7 +146,17 @@ export abstract class ReCaptchaHost extends CaptchaHost {
 		this.setOptions({})
 	}
 
-	// TODO matchHost, see https://developers.google.com/recaptcha/docs/domain_validation
+	matchHost(host: string): boolean {
+		// see https://developers.google.com/recaptcha/docs/domain_validation
+		for(const matchHost of this.hosts) {
+			const lenTail = matchHost.length + 1
+			const lenHost = host.length
+			if(host == matchHost || (lenHost >= lenTail && host.substr(lenHost - lenTail) == `.${matchHost}`)) {
+				return true
+			}
+		}
+		return false
+	}
 
 	protected getOption<T extends Json>(
 		options:  CaptchaHostOptions,
