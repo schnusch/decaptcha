@@ -27,13 +27,16 @@ gencert = mkdir -p $(@D) && openssl req -x509 -sha256 -nodes -days 365 \
 	-newkey rsa:4096 -keyout $(@D)/private.key -out $(@D)/certificate.crt \
 	-subj '/CN=localhost' || { $(RM) -r $(@D); false; }
 
-all: dist/main.js public.mk ## build decaptcha
+all: dist/main.js dist/recaptcha-sitekeys.json public.mk ## build decaptcha
 	$(MAKE) -f public.mk all
 public.mk: genmake.sh
 	TSC=$(tsc) ./genmake.sh > $@ || { $(RM) $@; false; }
 
 dist/main.js: $(ts_files) tsconfig/node.json package-lock.json
 	$(tsc) -p tsconfig/node.json
+dist/recaptcha-sitekeys.json:
+	mkdir -p $(@D)
+	curl -Lo $@ https://github.com/schnusch/recaptcha-sitekeys/raw/master/sitekeys.json
 
 package-lock.json: package.json
 	npm install

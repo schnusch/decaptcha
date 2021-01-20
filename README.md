@@ -6,7 +6,7 @@ This tool lets you solve [reCAPTCHAs](https://developers.google.com/recaptcha/in
 To solve CAPTCHAs you have to communicate with the stdin/stdout of the process.
 Write [CaptchaRequest](https://github.com/schnusch/decaptcha/blob/a376080/app/util.ts#L38)s
 encoded to a single line of JSON to stdin. The CAPTCHA responses are written to
-the process's stdout. **There are no handlers yet (see [app/hosts/](https://github.com/schnusch/decaptcha/tree/master/app/hosts)).**
+the process's stdout.
 
 ## About
 
@@ -57,12 +57,56 @@ To imitate this the following steps are taken:
 
 ## Usage
 
-**Usage:** `decaptcha --cert=CERT --key=KEY [--https-port=PORT] [--dev-tools] [--close-window]`
+**Usage:** decaptcha --cert=*CERT* --key=*KEY* [--https-port=*PORT*] [--dev-tools] [--close-window]
+
+First you have to have a SSL certificate and its key. It can be self-signed, it
+is only used for our HTTPS server and will be blindy accepted by our electron
+app.
+
+To solve CAPTCHAS with decaptcha you have to communicate with it on its stdin
+and stdout. An example CAPTCHA requests looks like this:
+
+```json
+{
+	"url": "https://decaptcha.test/anypathyoulike",
+	"options": {
+		"sitekey": "6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI",
+		"invisible": false
+	}
+}
+```
+
+This request has to be JSON encoded and must only consist of a single line.
+
+decaptcha will add the CAPTCHA request to its queue and open a window to display
+the CAPTCHAs.
+
+The corresponding CAPTCHA response will be a single line of JSON written to
+stdout and will look like this:
+
+```json
+{
+	"response": "..."
+}
+```
+
+or
+
+```json
+{
+	error: true,
+	reason: "cancelled by closing the window"
+}
+```
+
+if an error occured.
 
 ## Limitations
 
   * Only hosts for which a handler is created (see [app/hosts/](https://github.com/schnusch/decaptcha/tree/master/app/hosts))
-    are supported. Ideally there should exist a generic handler.
+    are supported, but there exists a generic handler for reCAPTCHA that uses a
+    site key provided in the CAPTCHA request or from [a repository of reCAPTCHA
+    site keys](https://github.com/schnusch/recaptcha-sitekeys/).
 
   * Plain unencrypted HTTP will not work because we are only running a HTTP**S**
     server, but this should not be too big of a problem.

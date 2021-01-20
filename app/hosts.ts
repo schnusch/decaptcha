@@ -18,11 +18,11 @@
  */
 
 import { DecaptchaTest } from './hosts/decaptchatest'
-import { Evoload } from './hosts/evoload'
+import { ReCaptcha } from './hosts/recaptcha'
 
 export const captchaHosts: CaptchaHost[] = [
 	new DecaptchaTest(),
-	new Evoload(),
+	new ReCaptcha(),
 ]
 
 import { CaptchaHost } from './hosts/common'

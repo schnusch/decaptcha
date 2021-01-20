@@ -17,10 +17,18 @@
  * along with decaptcha.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { ReCaptchaHost } from './common'
+import { ReCaptcha } from './recaptcha'
 
-export class DecaptchaTest extends ReCaptchaHost {
+export class DecaptchaTest extends ReCaptcha {
 	constructor() {
-		super({hosts: ['decaptcha.test']})
+		super({
+			// testing site key, see https://developers.google.com/recaptcha/docs/faq#id-like-to-run-automated-tests-with-recaptcha.-what-should-i-do
+			sitekey:   '6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI',
+			invisible: true,
+		})
+	}
+
+	matchHost(host: string): boolean {
+		return host.match(/(^|\.)decaptcha\.test$/) != null
 	}
 }
