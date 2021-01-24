@@ -1,0 +1,59 @@
+digraph "CAPTCHA display loop" {
+	graph [fontsize=8,fontname="sans-serif",rankdir=LR,layout=dot];
+	edge  [fontsize=8,fontname="sans-serif"];
+	node  [fontsize=8,fontname="sans-serif",shape=rect];
+
+	subgraph cluster_end {
+		graph [style=invisible];
+		end [label="GUI loop stopped",shape=ellipse];
+	}
+
+	subgraph cluster_run {
+		graph [style=invisible];
+		run [label="await run()"];
+	}
+
+	subgraph cluster_solve {
+		graph [style=invisible];
+		solve [label="await solve(...)"];
+	}
+
+	subgraph cluster_stop {
+		graph [style=invisible];
+		stop [label="stop()"];
+	}
+
+	run   -> _try_show_current_captcha [label="start the GUI loop"];
+	solve -> _try_show_captcha         [label="queue a new CAPTCHA"];
+	stop  -> idle                      [style=dashed];
+
+	subgraph cluster_glib {
+		nop  [label="do nothing",shape=ellipse];
+		idle [shape=point,style=invisible];
+		_try_show_current_captcha [label="_try_show_current_captcha()"];
+		_show_current_captcha     [label="_show_current_captcha()"];
+		_try_show_captcha         [label="_try_show_captcha()"];
+		_close                    [label="_close()"];
+		_on_window_closed         [label="_on_window_closed(...)"];
+		_on_script_message        [label="_on_script_message(...)"];
+	}
+
+	_try_show_current_captcha -> _show_current_captcha [label="unfinished current CAPTCHA"];
+	_try_show_current_captcha -> _try_show_captcha     [label="no current CAPTCHA"];
+
+	_try_show_captcha -> _close                [label="no more CAPTCHAs queued"];
+	_try_show_captcha -> _show_current_captcha [label="set current CAPTCHA"];
+	_try_show_captcha -> nop                   [label="CAPTCHA loop already running"];
+
+	_show_current_captcha -> idle [style=dashed,dir=none];
+	idle -> _on_window_closed  [style=dashed,label="user closes the WebKit window"];
+	idle -> _on_script_message [style=dashed,label="CAPTCHA is solved (by the user)"];
+	idle -> end                [style=dashed,label="stop called"];
+
+	end -> run [label="gtk_main_quit()"];
+
+	_on_window_closed  -> _try_show_captcha [label="process next CAPTCHA"];
+	_on_window_closed  -> solve             [label="future.set_exception(...)"];
+	_on_script_message -> _try_show_captcha [label="process next CAPTCHA"];
+	_on_script_message -> solve             [label="future.set_result(...)"];
+}
