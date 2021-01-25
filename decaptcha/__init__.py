@@ -93,7 +93,7 @@ def read_resource(name: str) -> str:
 
 class HTMLGenerator:
 	def __init__(self):
-		pass
+		self.css = read_resource('index.css')
 
 	@staticmethod
 	def escape_xml(x: str) -> str:
@@ -111,10 +111,15 @@ class HTMLGenerator:
 class ReCaptchaHTMLGenerator(HTMLGenerator):
 	#  testing site key, see https://developers.google.com/recaptcha/docs/faq#id-like-to-run-automated-tests-with-recaptcha.-what-should-i-do
 	fallback_sitekey = '6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI'
+	api_url          = 'https://www.recaptcha.net/recaptcha/api.js'
+	html_attributes  = {
+		'class':         'g-recaptcha',
+		'data-badge':    'inline',
+		'data-callback': 'onSubmit',
+	}
 
 	def __init__(self):
-		super()
-		self.css      = read_resource('index.css')
+		super().__init__()
 		self.js       = read_resource('recaptcha.js')
 		self.htmlbase = read_resource('recaptcha.html')
 
@@ -139,14 +144,33 @@ class ReCaptchaHTMLGenerator(HTMLGenerator):
 			raise CaptchaException('options.invisible must be a boolean')
 
 	def generate(self, req: CaptchaRequest) -> str:
-		options = {'data-sitekey': self.get_sitekey(req)}
+		options = {}
+		options.update(self.html_attributes)
+		options['data-sitekey'] = self.get_sitekey(req)
 		if self.is_invisible(req):
 			options['data-size'] = 'invisible'
 		return self.htmlbase.format(
-			css    =self.css,
-			js     =self.js,
-			options=self.xml_attrs(options),
+			css  =self.css,
+			js   =self.js,
+			api  =self.api_url,
+			attrs=self.xml_attrs(options),
 		)
+
+class HCaptchaHTMLGenerator(ReCaptchaHTMLGenerator):
+	api_url         = 'https://hcaptcha.com/1/api.js'
+	html_attributes = {
+		'class':         'h-captcha',
+		'data-callback': 'onSubmit',
+	}
+
+	def __init__(self):
+		super().__init__()
+		self.js = self.js.replace('grecaptcha', 'hcaptcha')
+
+	@property
+	def fallback_sitekey(self):
+		""" hackishly require options.sitekey """
+		raise CaptchaException('options.sitekey is missing') from None
 
 
 class DeCaptcha:

@@ -3,15 +3,15 @@ function postResponse(data) {
 	webkit.messageHandlers.decaptcha.postMessage(data);
 }
 
-function grecaptchaOnLoad() {
+function onLoad() {
 	grecaptcha.execute();
 }
 
-function grecaptchaOnSubmit() {
+function onSubmit() {
 	const resp = grecaptcha.getResponse();
 
 	const main    = document.querySelector('#main');
-	const captcha = document.querySelector('.g-recaptcha');
+	const captcha = main.firstElementChild;
 
 	const txt = main.appendChild(document.createElement('textarea'));
 	txt.setAttribute('readonly', 'yes');

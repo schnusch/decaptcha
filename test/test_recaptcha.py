@@ -23,6 +23,7 @@ import unittest
 from decaptcha import (
 	CaptchaException,
 	DeCaptcha,
+	HCaptchaHTMLGenerator,
 	ReCaptchaHTMLGenerator,
 )
 
@@ -62,6 +63,19 @@ class ReCaptcha(unittest.TestCase):
 					print(e.to_dict())
 				except:
 					logging.exception('error solving CAPTCHA')
+
+			self.viewer.html_generator = HCaptchaHTMLGenerator()
+			try:
+				print(await self.viewer.solve({
+					'url': 'https://captcha.website/',
+					'options': {
+						'sitekey': '33f96e6a-38cd-421b-bb68-7806e1764460',
+					},
+				}))
+			except CaptchaException as e:
+				print(e.to_dict())
+			except:
+				logging.exception('error solving CAPTCHA')
 		finally:
 			self.viewer.stop()
 		await self.gui
