@@ -5,6 +5,7 @@ pkgs.mkShell {
     webkitgtk
     youtube-dl
   ]) ++ (with pkgs.python3Packages; [
+    aiohttp
     jsonschema
     mypy
     pygobject3
